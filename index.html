@@ -123,7 +123,7 @@
 		new Vue({
 			el: '#game',
 			data() {
-				let zoneOptions = [{
+				let survivalOptions = [{
 					length: 25,
 					speed: 1.5,
 					damage: 0,
@@ -165,14 +165,18 @@
 						type: 'firstAid',
 						weight: 3
 					}]
-				}, {
+				}];
+
+				let standardOptions = [...survivalOptions];
+
+				standardOptions.push({
 					length: 25,
 					speed: 4,
 					damage: 0,
 					groundType: 'core',
 					killMessage: 'You met your destiny on the path you took to avoid it.',
 					npcs: []
-				}];
+				});
 
 				return {
 					left: false,
@@ -198,8 +202,9 @@
 					zones: {
 						index: 0,
 						prevStartDepth: 0,
-						sequence: [...zoneOptions],
-						options: [...zoneOptions]
+						sequence: [],
+						standardOptions: [...standardOptions],
+						survivalOptions: [...survivalOptions]
 					},
 					character: {
 						hitbox: {
@@ -296,9 +301,6 @@
 				},
 				nextZone() {
 					return this.zones.sequence[this.zones.index + 1];
-				},
-				nextNextZone() {
-					return this.zones.sequence[this.zones.index + 2];
 				},
 				lastZone() {
 					return this.zones.sequence[this.zones.sequence.length - 1];
@@ -520,8 +522,6 @@
 					this.survival = survival;
 					this.lossText = '';
 
-					this.zones.sequence = [...this.zones.options];
-
 					this.startDetails();
 					this.startGround();
 					this.startNpcs();
@@ -531,9 +531,16 @@
 					this.playAudio(audio);
 				},
 				startStandard() {
+					this.zones.sequence = [...this.zones.standardOptions];
+
 					this.start(false, this.$refs.standardAudio);
 				},
 				startSurvival() {
+					this.zones.sequence = [
+						this.zones.survivalOptions[Math.floor(this.zones.survivalOptions.length * Math.random())],
+						this.zones.survivalOptions[Math.floor(this.zones.survivalOptions.length * Math.random())]
+					];
+
 					this.start(true, this.$refs.survivalAudio);
 				},
 				startGround() {
@@ -554,7 +561,7 @@
 					this.startNextZoneNpcs();
 				},
 				startNextZoneNpcs() {
-					if (this.zones.index >= this.zones.sequence.length - 2) return;
+					if (!this.survival && this.zones.index >= this.zones.sequence.length - 2) return;
 
 					this.nextZone.npcs.forEach(npcOption => {
 						let npc = this[npcOption.type];
@@ -627,15 +634,13 @@
 
 						if (this.nextZone) {
 							if (this.depthToNextZone <= 0) {
-								this.zones.index++;
-
 								this.zones.prevStartDepth = this.depth;
 
-								if (this.survival && !this.nextZone) {
+								if (!this.survival) this.zones.index++;
+								else if (this.zones.index === 0) {
 									this.zones.sequence.shift();
-									this.zones.sequence.push(this.zones.options[Math.floor(this.zones.options.length * Math.random())]);
-									console.log(JSON.parse(JSON.stringify(this.zones.sequence)));
-								}
+									this.zones.sequence.push(this.zones.survivalOptions[Math.floor(this.zones.survivalOptions.length * Math.random())]);
+								} else this.zones.index = 0;
 							}
 							else if (this.depthToNextZone === 10) this.startNextZoneNpcs();
 						}
