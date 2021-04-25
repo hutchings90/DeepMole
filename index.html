@@ -10,7 +10,8 @@
 <body>
 	<div id="game" ref="game" @mousedown=onmousedown @mouseleave=onmouseleave @mousemove=onmousemove>
 		<div ref="themeAudio">
-			<audio src="assets/audio/theme/theme-0.mp3" loop></audio>
+			<audio src="assets/audio/theme/theme-0.mp3" @ended=themeEnded></audio>
+			<audio src="assets/audio/theme/theme-1.mp3" @ended=themeEnded></audio>
 		</div>
 
 		<div ref="standardAudio">
@@ -487,6 +488,12 @@
 
 					if (playableAudios.length > 0) playableAudios[Math.floor(playableAudios.length * Math.random())].play();
 				},
+				playTheme() {
+					this.playAudio(this.$refs.themeAudio);
+				},
+				themeEnded() {
+					this.playTheme();
+				},
 				start(survival, audio) {
 					this.survival = survival;
 					this.lossText = '';
@@ -494,7 +501,7 @@
 					this.zones.sequence = [...this.zones.options];
 
 					this.playAudio(audio);
-					this.playAudio(this.$refs.themeAudio);
+					this.playTheme();
 					this.startDetails();
 					this.startGround();
 					this.startNpcs();
