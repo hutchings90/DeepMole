@@ -491,6 +491,8 @@
 					this.survival = survival;
 					this.lossText = '';
 
+					this.zones.sequence = [...this.zones.options];
+
 					this.playAudio(audio);
 					this.playAudio(this.$refs.themeAudio);
 					this.startDetails();
