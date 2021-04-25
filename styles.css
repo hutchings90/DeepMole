@@ -1,0 +1,73 @@
+body {
+	text-align: center;
+	font-size: 0;
+}
+
+#game {
+	display: inline-block;
+	background: black;
+	height: 700px;
+	width: 700px;
+	overflow: hidden;
+	position: relative;
+	text-align: left;
+}
+
+#details-container {
+}
+
+#details, #end-screen {
+	background: rgba(0, 0, 0, .4);
+	color: white;
+	font-size: 20px;
+	font-family: monospace;
+	position: absolute;
+}
+
+#ground {
+	position: absolute;
+}
+
+.ground-cell {
+	text-align: center;
+	display: inline-block;
+	vertical-align: middle;
+}
+
+.npc {
+	position: absolute;
+}
+
+#character {
+	position: absolute;
+}
+
+#character.invincible {
+	animation: flash .5s linear infinite;
+}
+
+@keyframes flash {
+	50% {
+		filter: brightness(0) invert(1);
+	}
+}
+
+#end-screen {
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	text-align: center;
+}
+
+.shield {
+	opacity: .25;
+	background: blue;
+	position: absolute;
+	height: 90px;
+	width: 90px;
+	border-radius: 50%;
+}
+
+.shield.hit {
+	animation: flash .5s linear infinite;
+}

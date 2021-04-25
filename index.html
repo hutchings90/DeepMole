@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Deep Mole</title>
+
+	<link rel="stylesheet" type="text/css" href="styles.css">
+
+	<script type="text/javascript" src="vue.min.js"></script>
+</head>
+<body>
+	<div id="game" ref="game" @mousedown=onmousedown @mouseleave=onmouseleave @mousemove=onmousemove>
+		<div ref="themeAudio">
+			<audio src="assets/audio/theme/theme-0.mp3" loop></audio>
+		</div>
+
+		<div ref="standardAudio">
+			<audio src="assets/audio/standard/standard-0.wav"></audio>
+			<audio src="assets/audio/standard/standard-1.wav"></audio>
+			<audio src="assets/audio/standard/standard-2.wav"></audio>
+		</div>
+
+		<div ref="hitAudio">
+			<audio src="assets/audio/hit/hit-0.wav"></audio>
+			<audio src="assets/audio/hit/hit-1.wav"></audio>
+			<audio src="assets/audio/hit/hit-2.wav"></audio>
+		</div>
+
+		<div ref="healAudio">
+			<audio src="assets/audio/heal/heal-0.wav"></audio>
+			<audio src="assets/audio/heal/heal-1.wav"></audio>
+			<audio src="assets/audio/heal/heal-2.wav"></audio>
+		</div>
+
+		<div ref="eatAudio">
+			<audio src="assets/audio/eat/eat-0.wav"></audio>
+			<audio src="assets/audio/eat/eat-1.wav"></audio>
+			<audio src="assets/audio/eat/eat-2.wav"></audio>
+		</div>
+
+		<div ref="victoryAudio">
+			<audio src="assets/audio/victory/victory-0.wav"></audio>
+			<audio src="assets/audio/victory/victory-1.wav"></audio>
+			<audio src="assets/audio/victory/victory-2.wav"></audio>
+		</div>
+
+		<div ref="blockAudio">
+			<audio src="assets/audio/block/block-0.wav"></audio>
+			<audio src="assets/audio/block/block-1.wav"></audio>
+			<audio src="assets/audio/block/block-2.wav"></audio>
+		</div>
+
+		<div ref="shieldAudio">
+			<audio src="assets/audio/shield/shield-0.wav"></audio>
+			<audio src="assets/audio/shield/shield-1.wav"></audio>
+			<audio src="assets/audio/shield/shield-2.wav"></audio>
+		</div>
+
+		<div ref="survivalAudio">
+			<audio src="assets/audio/survival/survival-0.wav"></audio>
+			<audio src="assets/audio/survival/survival-1.wav"></audio>
+			<audio src="assets/audio/survival/survival-2.wav"></audio>
+		</div>
+
+		<div id="ground" :style=groundStyle>
+			<img v-for='ground in groundCells' :src=ground>
+		</div>
+
+		<img v-for='npc in npcs' :src=npc.src :style=npc.style class="npc"></img>
+
+		<img id="character" ref="character" :src=characterSrc :class=character.classes :style=character.style>
+
+		<div v-if=character.shield :style=shieldStyle :class=character.shieldClasses class='shield'></div>
+
+		<table id="details">
+			<thead>
+				<th>Score</th>
+				<th>Depth</th>
+				<th>Health</th>
+				<th>Food</th>
+			</thead>
+			<tbody>
+				<tr>
+					<td v-text=score></td>
+					<td v-text=depth></td>
+					<td v-text=character.health></td>
+					<td v-text=character.food></td>
+				</tr>
+			</tbody>
+		</table>
+
+		<table id="end-screen" v-show='gameOver || !interval'>
+			<thead>
+				<th>
+					<template v-if=won>You win!</template>
+					<template v-else-if=character.lost>{{ lossText }}</template>
+					<template v-else>Welcome!</template>
+				</th>
+			</thead>
+			<tbody>
+				<tr>
+					<td>
+						<button @click=startStandard>Standard</button>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<button @click=startSurvival>Survival</button>
+					</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+	<script type="text/javascript">
+		new Vue({
+			el: '#game',
+			data() {
+				let zoneOptions = [{
+					length: 25,
+					speed: 1.5,
+					damage: 0,
+					groundType: 'dirt',
+					killMessage: 'You got buried six feet under.',
+					npcs: [{
+						type: 'worm',
+						weight: 2
+					}]
+				}, {
+					length: 25,
+					speed: .75,
+					damage: 0,
+					groundType: 'bedrock',
+					killMessage: 'You died in your sleep.',
+					npcs: [{
+						type: 'silverFish',
+						weight: 1
+					}, {
+						type: 'firebrat',
+						weight: 1
+					}, {
+						type: 'firstAid',
+						weight: 1
+					}]
+				}, {
+					length: 25,
+					speed: 1.25,
+					damage: 1,
+					groundType: 'magma',
+					killMessage: 'You roasted alive in magma.',
+					npcs: [{
+						type: 'firebrat',
+						weight: 1
+					}, {
+						type: 'shield',
+						weight: 3,
+					}, {
+						type: 'firstAid',
+						weight: 3
+					}]
+				}, {
+					length: 25,
+					speed: 4,
+					damage: 0,
+					groundType: 'core',
+					killMessage: 'You met your destiny on the path you took to avoid it.',
+					npcs: []
+				}];
+
+				return {
+					left: false,
+					up: false,
+					right: false,
+					down: false,
+					interval: null,
+					clearHitTimeout: null,
+					clearPassiveDamageTimeout: null,
+					clearShieldHitTimeout: null,
+					pointer: {
+						left: false,
+						x: null,
+						y: null
+					},
+					survival: false,
+					lossText: '',
+					steps: 0,
+					depth: 0,
+					score: 0,
+					groundCells: [],
+					npcs: [],
+					zones: {
+						index: 0,
+						prevStartDepth: 0,
+						sequence: [...zoneOptions],
+						options: [...zoneOptions]
+					},
+					character: {
+						hitbox: {
+							x: 10,
+							y: 0,
+							width: 50,
+							height: 50
+						},
+						position: {
+							x: 315,
+							y: 0
+						},
+						health: 100,
+						food: 100,
+						takingPassiveDamage: false,
+						gotHit: false,
+						shieldHit: false,
+						distance: 0,
+						shield: 0,
+
+						get style() {
+							return 'left:' + this.position.x + 'px;'
+								+ 'top:' + this.position.y + 'px;';
+						},
+
+						get lost() {
+							return this.health <= 0 || this.food <= 0;
+						},
+
+						get invincible() {
+							return this.gotHit;
+						},
+
+						get classes() {
+							return {
+								'got-hit': this.gotHit,
+								invincible: this.invincible || this.takingPassiveDamage,
+								lost: this.lost
+							};
+						},
+
+						get shieldClasses() {
+							return {
+								hit: this.shieldHit
+							};
+						}
+					}
+				};
+			},
+			mounted() {
+				window.onkeydown = this.onkeydown;
+				window.onkeyup = this.onkeyup;
+				window.onmousedown = this.onmousedown;
+				window.onmouseup = this.onmouseup;
+
+				document.querySelectorAll('audio[src*="wav"]').forEach(audio => audio.volume = .4);
+			},
+			computed: {
+				clearHitTime() {
+					return 1000;
+				},
+				clearPassiveDamageTime() {
+					return 1000;
+				},
+				clearShieldHitTime() {
+					return 1000;
+				},
+				won() {
+					return !this.survival && this.zone && this.zone.groundType === 'core';
+				},
+				gameOver() {
+					return this.won || this.character.lost;
+				},
+				assetDir() {
+					return 'assets';
+				},
+				imageDir() {
+					return this.assetDir + '/images';
+				},
+				groundDir() {
+					return this.imageDir + '/ground';
+				},
+				characterDir() {
+					return this.imageDir + '/character';
+				},
+				groundStyle() {
+					return 'bottom:' + (this.steps - (this.won ? 0 : 70)) + 'px;';
+				},
+				shieldStyle() {
+					return 'top:' + (this.character.position.y - 10) + 'px;left:' + (this.character.position.x - 10) + 'px;';
+				},
+				zone() {
+					return this.zones.sequence[this.zones.index];
+				},
+				nextZone() {
+					return this.zones.sequence[this.zones.index + 1];
+				},
+				nextNextZone() {
+					return this.zones.sequence[this.zones.index + 2];
+				},
+				lastZone() {
+					return this.zones.sequence[this.zones.sequence.length - 1];
+				},
+				speed() {
+					if (this.gameOver) return 0;
+					if (this.inNextZone) return this.nextZone.speed;
+					if (this.inZone) return this.zone.speed;
+					return 5;
+				},
+				maxSpeed() {
+					return Math.max(...this.zones.sequence.map(zone => zone.speed));
+				},
+				characterSpeed() {
+					if (this.character.lost) return 0;
+					return 1 + (this.won ? this.zone.speed : this.speed);
+				},
+				characterXVelocity() {
+					let x = 0;
+					let boundingRect = this.$refs.game.getBoundingClientRect();
+
+					if (this.left || (this.pointer.x !== null && this.pointer.x - this.characterSpeed < boundingRect.x + (this.character.position.x + 35))) x--;
+					if (this.right || (this.pointer.x !== null && this.pointer.x + this.characterSpeed > boundingRect.x + (this.character.position.x + 35))) x++;
+
+					return x;
+				},
+				characterXVelocitySquared() {
+					return this.characterXVelocity * this.characterXVelocity;
+				},
+				characterYVelocity() {
+					let y = 0;
+					let boundingRect = this.$refs.game.getBoundingClientRect();
+
+					if (this.up || (this.pointer.y !== null && this.pointer.y - this.characterSpeed < boundingRect.y + (this.character.position.y + 35))) y--;
+					if (this.down || (this.pointer.y !== null && this.pointer.y + this.characterSpeed > boundingRect.y + (this.character.position.y + 35))) y++;
+
+					return y;
+				},
+				characterYVelocitySquared() {
+					return this.characterYVelocity * this.characterYVelocity;
+				},
+				characterVelocity() {
+					let x = this.characterXVelocity;
+					let y = this.characterYVelocity;
+
+					if (!(x === 0 && y === 0)) {
+						let speed = Math.pow(this.characterXVelocitySquared + this.characterYVelocitySquared, .5);
+
+						x /= speed;
+						y /= speed;
+					}
+
+					return {
+						x: x * this.characterSpeed,
+						y: y * this.characterSpeed
+					};
+				},
+				characterSrc() {
+					let filename = '';
+
+					if (this.character.gotHit || this.character.lost) filename = 'gotHit.png';
+					else if (this.interval && (this.speed > 0 || !(this.characterVelocity.x === 0 && this.characterVelocity.y === 0))) filename = 'dig.gif';
+					else filename = 'idle.png';
+
+					return this.characterDir + '/' + filename;
+				},
+				characterHitboxBottom() {
+					return this.character.position.y + this.character.hitbox.y;
+				},
+				characterHitboxTop() {
+					return this.characterHitboxBottom + this.character.hitbox.height;
+				},
+				characterHitboxLeft() {
+					return this.character.position.x + this.character.hitbox.x;
+				},
+				inZone() {
+					return this.zone && this.characterHitboxBottom <= this.stepsToNextZone;
+				},
+				depthToNextZone() {
+					return this.zone ? this.zones.prevStartDepth + this.zone.length - this.depth : (this.depth * -1);
+				},
+				depthToNextNextZone() {
+					return this.depthToNextZone + this.nextZone.length;
+				},
+				stepsToNextZone() {
+					return this.depthToNextZone * 70;
+				},
+				inNextZone() {
+					return this.nextZone && this.characterHitboxTop >= this.stepsToNextZone;
+				},
+				worm() {
+					return {
+						type: 'worm',
+						density: 1/30,
+						numOptions: 3,
+						damage: 0,
+						piercing: false,
+						shield: 0,
+						food: 10,
+						points: 100,
+						killMessage: 'A series of unfortunate events happened.',
+						hitbox: {
+							x: 0,
+							y: 0,
+							width: 70,
+							height: 70
+						}
+					};
+				},
+				silverFish() {
+					return {
+						type: 'silverFish',
+						density: 1/35,
+						numOptions: 3,
+						damage: 0,
+						piercing: false,
+						shield: 0,
+						food: 15,
+						points: 200,
+						killMessage: 'A bug gotcha.',
+						hitbox: {
+							x: 0,
+							y: 0,
+							width: 70,
+							height: 70
+						}
+					};
+				},
+				firebrat() {
+					return {
+						type: 'firebrat',
+						density: 1/35,
+						numOptions: 3,
+						damage: 5,
+						piercing: false,
+						shield: 0,
+						food: 10,
+						points: 0,
+						killMessage: 'You got scorched by a firebrat.',
+						hitbox: {
+							x: 0,
+							y: 0,
+							width: 70,
+							height: 70
+						}
+					};
+				},
+				firstAid() {
+					return {
+						type: 'firstAid',
+						density: 1/500,
+						numOptions: 1,
+						damage: -10,
+						piercing: false,
+						shield: 0,
+						food: 0,
+						points: 0,
+						killMessage: 'You were killed with kindness.',
+						hitbox: {
+							x: 0,
+							y: 0,
+							width: 70,
+							height: 70
+						}
+					};
+				},
+				shield() {
+					return {
+						type: 'shield',
+						density: 1/500,
+						numOptions: 1,
+						damage: 0,
+						piercing: false,
+						shield: 15,
+						food: 0,
+						points: 0,
+						killMessage: 'You were stabbed in the back.',
+						hitbox: {
+							x: 0,
+							y: 0,
+							width: 70,
+							height: 70
+						}
+					};
+				}
+			},
+			watch: {
+				won() {
+					if (this.won) this.playAudio(this.$refs.victoryAudio);
+				}
+			},
+			methods: {
+				playAudio(audios) {
+					let playableAudios = Array.from(audios.children).filter(audio => audio.currentTime === 0 || audio.currentTime >= audio.duration);
+
+					if (playableAudios.length > 0) playableAudios[Math.floor(playableAudios.length * Math.random())].play();
+				},
+				start(survival, audio) {
+					this.survival = survival;
+					this.lossText = '';
+
+					this.playAudio(audio);
+					this.playAudio(this.$refs.themeAudio);
+					this.startDetails();
+					this.startGround();
+					this.startNpcs();
+					this.startCharacter();
+					this.startInterval();
+				},
+				startStandard() {
+					this.start(false, this.$refs.standardAudio);
+				},
+				startSurvival() {
+					this.start(true, this.$refs.survivalAudio);
+				},
+				startGround() {
+					this.groundCells = [];
+
+					this.addGroundRow();
+				},
+				addGroundRow() {
+					let zone = this.nextZone && (this.depthToNextZone <= 10 || this.depth < 0) ? this.nextZone : this.zone;
+
+					for (var i = 9; i >= 0; i--) {
+						this.groundCells.push(this.getRandomGround(zone.groundType));
+					}
+				},
+				startNpcs() {
+					this.npcs = [];
+
+					this.startNextZoneNpcs();
+				},
+				startNextZoneNpcs() {
+					if (this.zones.index >= this.zones.sequence.length - 2) return;
+
+					this.nextZone.npcs.forEach(npcOption => {
+						let npc = this[npcOption.type];
+						let quantity = Math.floor((npc.density * npcOption.weight) * this.depthToNextNextZone * 10);
+
+						if (quantity <= 0 && Math.random() & 1) quantity = 1;
+
+						for (var i = quantity; i > 0; i--) {
+							this.addNextZoneNpc(npc);
+						}
+					});
+				},
+				addNextZoneNpc(npc) {
+					this.npcs.push({
+						damage: npc.damage,
+						food: npc.food,
+						points: npc.points,
+						killMessage: npc.killMessage,
+						shield: npc.shield,
+						hitbox: {
+							x: npc.hitbox.x,
+							y: npc.hitbox.y,
+							width: npc.hitbox.width,
+							height: npc.hitbox.height
+						},
+						position: {
+							x: 70 * Math.floor(10 * Math.random()),
+							y: 700 + (70 * Math.floor(this.nextZone.length * Math.random()))
+						},
+						src: this.imageDir + '/' + npc.type + '/' + npc.type + '-' + Math.floor(npc.numOptions * Math.random()) + '.png',
+
+						get style() {
+							return 'left:' + this.position.x + 'px;'
+								+ 'top:' + this.position.y + 'px;'
+						}
+					});
+				},
+				startCharacter() {
+					this.character.position.x = 315;
+					this.character.position.y = 0;
+					this.character.health = 100;
+					this.character.food = 100;
+					this.takingPassiveDamage = false;
+					this.gotHit = false;
+					this.shieldHit = false;
+					this.distance = 0;
+					this.character.shield = 0;
+				},
+				startDetails() {
+					this.steps = 0;
+					this.score = 0;
+					this.zones.index = -1;
+					this.depth = 10 * this.zones.index;
+					this.zones.prevStartDepth = 0;
+				},
+				startInterval() {
+					this.stopInterval();
+					this.interval = setInterval(this.move, 10);
+				},
+				move() {
+					this.steps += this.speed;
+
+					if (this.steps >= 70) {
+						this.depth++;
+						this.steps = 0;
+
+						this.character.food = Math.max(0, this.character.food - 1);
+
+						if (this.character.lost) this.lossText = 'You starved to death.';
+
+						if (this.nextZone) {
+							if (this.depthToNextZone <= 0) {
+								this.zones.index++;
+
+								this.zones.prevStartDepth = this.depth;
+
+								if (this.survival && !this.nextZone) {
+									this.zones.sequence.shift();
+									this.zones.sequence.push(this.zones.options[Math.floor(this.zones.options.length * Math.random())]);
+									console.log(JSON.parse(JSON.stringify(this.zones.sequence)));
+								}
+							}
+							else if (this.depthToNextZone === 10) this.startNextZoneNpcs();
+						}
+
+						if (!this.gameOver) {
+							if (this.depth > 0) this.groundCells.splice(0, 10);
+
+							this.doZoneDamage();
+							this.addGroundRow();
+						}
+					}
+
+					if (this.zone) {
+						let newX = Math.min(630, Math.max(0, this.character.position.x + this.characterVelocity.x));
+						let newY = Math.min(630, Math.max(0, this.character.position.y + this.characterVelocity.y));
+
+						this.character.distance += Math.pow(Math.pow(newX - this.character.position.x, 2) + Math.pow(newY - this.character.position.y, 2), .5);
+
+						this.character.position.x = newX;
+						this.character.position.y = newY;
+					}
+
+					if (!this.gameOver && this.character.distance > 140) {
+						this.character.food--;
+						this.character.distance = 0;
+					}
+
+					this.npcs.forEach(npc => npc.position.y -= this.speed);
+
+					for (var i = this.npcs.length - 1; i >= 0; i--) {
+						let npc = this.npcs[i];
+
+						if (npc.position.y <= -70) this.npcs.splice(i, 1);
+						else if (this.collide(npc, this.character)) {
+							this.npcs.splice(i, 1);
+
+							if (npc.shield) {
+								this.character.shield += npc.shield;
+
+								this.playAudio(this.$refs.shieldAudio);
+							}
+							if (npc.points) this.score += npc.points;
+							if (npc.food) this.character.food = Math.min(100, this.character.food + npc.food);
+
+							if (npc.damage) {
+								this.dealCharacterDamage(npc.damage, true, npc.piercing);
+
+								if (this.character.lost) this.lossText = npc.killMessage;
+							}
+							else if (npc.food) this.playEat();
+						}
+					}
+				},
+				dealCharacterDamage(amount, isHit, piercing) {
+					if (amount > 0 && isHit && this.character.invincible) return 0;
+
+					if (amount < 0) this.playHeal();
+					else {
+						if (this.character.shield) {
+							this.character.shield = Math.max(0, this.character.shield - amount);
+							this.character.shieldHit = true;
+
+							clearTimeout(this.clearShieldHitTimeout);
+
+							this.clearShieldHitTimeout = setTimeout(this.clearShieldHit, this.clearShieldHitTime);
+
+							if (!piercing) {
+								if (isHit) this.playAudio(this.$refs.blockAudio);
+
+								return 0;
+							}
+						}
+
+						if (isHit) {
+							clearTimeout(this.clearHitTimeout);
+
+							this.clearHitTimeout = setTimeout(this.clearHit, this.clearHitTime);
+							this.character.gotHit = true;
+
+							this.playHit();
+						}
+					}
+
+					let oldHealth = this.character.health;
+
+					this.character.health = Math.min(100, Math.max(0, this.character.health - amount));
+
+					return oldHealth - this.character.health;
+				},
+				clearHit() {
+					this.character.gotHit = false;
+				},
+				clearPassiveDamage() {
+					this.character.takingPassiveDamage = false;
+				},
+				clearShieldHit() {
+					this.character.shieldHit = false;
+				},
+				doZoneDamage() {
+					let damage = 0;
+
+					if (this.inZone && this.zone.damage) damage += this.zone.damage;
+					if (this.inNextZone && this.nextZone.damage) damage += this.nextZone.damage;
+
+					this.character.takingPassiveDamage = damage !== 0 && this.dealCharacterDamage(damage, false, false) > 0;
+
+					if (this.character.takingPassiveDamage) {
+						clearTimeout(this.clearPassiveDamageTimeout);
+
+						this.clearPassiveDamageTimeout = setTimeout(this.clearPassiveDamage, this.clearPassiveDamageTime);
+					}
+
+					if (this.character.lost) {
+						let killMessages = [];
+
+						if (this.inZone) killMessages.push(this.zone.killMessage);
+						if (this.inNextZone) killMessages.push(this.nextZone.killMessage);
+
+						this.lossText = killMessages.join(' ');
+					}
+				},
+				playHeal() {
+					this.playAudio(this.$refs.healAudio);
+				},
+				playHit() {
+					this.playAudio(this.$refs.hitAudio);
+				},
+				playEat() {
+					this.playAudio(this.$refs.eatAudio);
+				},
+				stopInterval() {
+					clearInterval(this.interval);
+					this.interval = null;
+				},
+				collide(i, j) {
+					return this.collideY(i, j) && this.collideX(i, j);
+				},
+				collideY(i, j) {
+					return !(this.below(i, j) || this.above(i, j));
+				},
+				below(i, j) {
+					let iMin = i.position.y + i.hitbox.y;
+					let jMax = j.position.y + j.hitbox.y + j.hitbox.height;
+
+					return jMax < iMin;
+				},
+				above(i, j) {
+					let iMax = i.position.y + i.hitbox.y + i.hitbox.height;
+					let jMin = j.position.y + j.hitbox.y;
+
+					return jMin > iMax;
+				},
+				collideX(i, j) {
+					return !(this.leftOf(i, j) || this.rightOf(i, j));
+				},
+				leftOf(i, j) {
+					let iMin = i.position.x + i.hitbox.x;
+					let jMax = j.position.x + j.hitbox.x + j.hitbox.width;
+
+					return jMax < iMin;
+				},
+				rightOf(i, j) {
+					let iMax = i.position.x + i.hitbox.x + i.hitbox.width;
+					let jMin = j.position.x + j.hitbox.x;
+
+					return jMin > iMax;
+				},
+				getRandomGround(type) {
+					return this.groundDir + '/' + type + '/' + type + '-' + Math.floor(5 * Math.random()) + '.png';
+				},
+				onkeydown(ev) {
+					if (!this.interval) return;
+
+					switch (ev.keyCode) {
+					case 37: this.left = true; break;
+					case 38: this.up = true; break;
+					case 39: this.right = true; break;
+					case 40: this.down = true; break;
+					}
+				},
+				onkeyup(ev) {
+					if (!this.interval) return;
+
+					switch (ev.keyCode) {
+					case 37: this.left = false; break;
+					case 38: this.up = false; break;
+					case 39: this.right = false; break;
+					case 40: this.down = false; break;
+					}
+				},
+				onmousedown(ev) {
+					if (ev.target.closest('#game') === this.$refs.game) {
+						this.pointer.left = false;
+						this.pointer = {
+							x: ev.x,
+							y: ev.y
+						};
+					}
+
+					ev.preventDefault();
+
+					return false;
+				},
+				onmouseup(ev) {
+					this.pointer.left = false;
+					this.pointer.x = null;
+					this.pointer.y = null;
+				},
+				onmouseleave(ev) {
+					this.pointer.left = this.pointer.x !== null && this.pointer.y !== null;
+					this.pointer.x = null;
+					this.pointer.y = null;
+				},
+				onmousemove(ev) {
+					if (this.pointer.left || this.pointer.x !== null) this.pointer.x = ev.x;
+					if (this.pointer.left || this.pointer.y !== null) this.pointer.y = ev.y;
+
+					this.pointer.left = false;
+				}
+			}
+		});
+	</script>
+</body>
+</html>
