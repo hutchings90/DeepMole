@@ -14,8 +14,12 @@
 			<audio src="assets/audio/theme/theme-1.mp3" @ended=themeEnded></audio>
 		</div>
 
-		<div ref="loseAudio">
-			<audio src="assets/audio/lose/lose-0.mp3"></audio>
+		<div ref="winThemeAudio">
+			<audio src="assets/audio/win-theme/win-theme-0.mp3" @ended=winThemeEnded></audio>
+		</div>
+
+		<div ref="loseThemeAudio">
+			<audio src="assets/audio/lose-theme/lose-theme-0.mp3"></audio>
 		</div>
 
 		<div ref="standardAudio">
@@ -432,7 +436,7 @@
 						piercing: false,
 						shield: 0,
 						food: 10,
-						points: 0,
+						points: 300,
 						killMessage: 'You got scorched by a firebrat.',
 						hitbox: {
 							x: 0,
@@ -451,7 +455,7 @@
 						piercing: false,
 						shield: 0,
 						food: 0,
-						points: 0,
+						points: 50,
 						killMessage: 'You were killed with kindness.',
 						hitbox: {
 							x: 0,
@@ -470,7 +474,7 @@
 						piercing: false,
 						shield: 15,
 						food: 0,
-						points: 0,
+						points: 50,
 						killMessage: 'You were stabbed in the back.',
 						hitbox: {
 							x: 0,
@@ -482,14 +486,13 @@
 				}
 			},
 			watch: {
-				won() {
-					if (this.won) this.playAudio(this.$refs.victoryAudio);
-				},
 				gameOver() {
 					if (this.gameOver) {
 						this.stopAudio(this.$refs.themeAudio.children);
-						this.playAudio(this.$refs.loseAudio);
-					} else this.stopAudio(this.$refs.loseAudio.children);
+
+						if (this.won) this.playAudio(this.$refs.winThemeAudio);
+						else this.playAudio(this.$refs.loseThemeAudio);
+					} else this.stopAudio(this.$refs.loseThemeAudio.children);
 				}
 			},
 			methods: {
@@ -509,6 +512,9 @@
 				},
 				themeEnded() {
 					this.playTheme();
+				},
+				winThemeEnded() {
+					this.playAudio(this.$refs.victoryAudio);
 				},
 				start(survival, audio) {
 					this.survival = survival;
